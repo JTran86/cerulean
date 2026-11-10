@@ -185,7 +185,7 @@ class _FloatingEmojiWordBarState extends State<_FloatingEmojiWordBar> with Singl
   }
 
   @override
-  Widget build(BuildContext context) => CompositedTransformTarget(link: _link, child: const SizedBox.shrink());
+  Widget build(BuildContext context) => CompositedTransformTarget(link: _link, child: const SizedBox(width: double.infinity, height: 0));
 }
 
 /// iOS QuickType-style row of emoji for the word being typed. Click one (or press Tab for the first) to swap it in.

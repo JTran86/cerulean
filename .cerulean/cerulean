@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# cerulean: build, install and run this private BlueBubbles fork.
+# Symlinked to ~/.local/bin/cerulean, so it works from anywhere.
+#
+#   cerulean update     build + install + restart the client in the Alt+I scratchpad   (what you normally run)
+#   cerulean build      compile only (build/linux/x64/release/bundle)
+#   cerulean install    copy the last build to ~/.local/opt/cerulean (does not restart anything)
+#   cerulean restart    stop the running client and start it again in the scratchpad
+#   cerulean start      start it in the scratchpad if it is not already running
+#   cerulean stop       quit the running client
+#   cerulean launch     run the installed client in the foreground (what the login autostart uses)
+#   cerulean status     which client is running, and which build is installed
+#
+# The client keeps its settings and messages in ~/.local/share/app.bluebubbles.BlueBubbles, shared with the Arch
+# "bluebubbles" package, so only one of them can run at a time. `cerulean launch` refuses to start a second copy.
+set -euo pipefail
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+REPO="$(dirname "$(dirname "$SELF")")"
+PREFIX="${CERULEAN_PREFIX:-$HOME/.local/opt/cerulean}"
+BUNDLE="$REPO/build/linux/x64/release/bundle"
+BIN="$HOME/.local/bin/cerulean"
+SCRATCHPAD="special:messages"     # Alt+I in hypr/modules/binds.lua
+
+running_pids() { pgrep -x bluebubbles || true; }          # -x: exact process name, never matches this script
+
+which_running() {
+    local p exe
+    for p in $(running_pids); do exe=$(readlink "/proc/$p/exe" 2>/dev/null || true); echo "$p $exe"; done
+}
+
+cmd_build()   { "$REPO/.cerulean/build.sh"; }
+
+cmd_install() {
+    [ -x "$BUNDLE/bluebubbles" ] || { echo "No build found. Run: cerulean build" >&2; exit 1; }
+    mkdir -p "$(dirname "$PREFIX")"
+    rm -rf "$PREFIX.new"
+    cp -a "$BUNDLE" "$PREFIX.new"
+    rm -rf "$PREFIX.old"
+    [ -e "$PREFIX" ] && mv "$PREFIX" "$PREFIX.old"
+    mv "$PREFIX.new" "$PREFIX"
+    rm -rf "$PREFIX.old"
+    mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
+    ln -sf "$SELF" "$BIN"
+    local icon="$PREFIX/data/flutter_assets/assets/icon/icon.png"
+    [ -e "$icon" ] || icon="bluebubbles"
+    cat > "$HOME/.local/share/applications/cerulean.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Cerulean
+Comment=Private BlueBubbles client
+Exec=$BIN launch
+Icon=$icon
+Categories=Network;Chat;
+StartupWMClass=bluebubbles
+EOF
+    echo "Installed to $PREFIX (built $(stat -c %y "$PREFIX/bluebubbles" | cut -d. -f1))"
+}
+
+cmd_stop() {
+    local p
+    for p in $(running_pids); do kill "$p" 2>/dev/null || true; done
+    for _ in $(seq 40); do [ -z "$(running_pids)" ] && return 0; sleep 0.25; done
+    for p in $(running_pids); do kill -9 "$p" 2>/dev/null || true; done
+    sleep 0.5
+}
+
+cmd_start() {
+    if [ -n "$(running_pids)" ]; then echo "Already running:"; which_running; return 0; fi
+    [ -x "$PREFIX/bluebubbles" ] || { echo "Not installed yet. Run: cerulean update" >&2; exit 1; }
+    # Same trick the login autostart uses: the window opens straight into the hidden scratchpad.
+    hyprctl dispatch "hl.dsp.exec_cmd(\"[workspace $SCRATCHPAD silent] $BIN launch\")" >/dev/null
+    for _ in $(seq 40); do [ -n "$(running_pids)" ] && break; sleep 0.25; done
+    which_running
+}
+
+cmd_restart() { cmd_stop; cmd_start; }
+
+cmd_launch() {
+    [ -n "$(running_pids)" ] && { echo "The client is already running." >&2; exit 0; }
+    # The build links against nix libraries, so (like every other nix GUI app on this machine) it needs nixGL to find
+    # the GPU driver. Without it the app exits at once when started from Hyprland (a terminal started under nixGL
+    # hides the problem, because the child shell inherits the driver environment).
+    if command -v nixGL >/dev/null 2>&1; then exec nixGL "$PREFIX/bluebubbles" "$@"; fi
+    exec "$PREFIX/bluebubbles" "$@"
+}
+
+cmd_status() {
+    echo "running:"; which_running | sed 's/^/  /'; [ -z "$(running_pids)" ] && echo "  (nothing)"
+    if [ -x "$PREFIX/bluebubbles" ]; then echo "installed: $PREFIX (built $(stat -c %y "$PREFIX/bluebubbles" | cut -d. -f1))"; else echo "installed: no"; fi
+    echo "repo: $REPO @ $(git -C "$REPO" describe --tags --always 2>/dev/null) ($(git -C "$REPO" status --short | wc -l) uncommitted file(s))"
+}
+
+case "${1:-update}" in
+    update)  cmd_build; cmd_install; cmd_restart ;;
+    build)   cmd_build ;;
+    install) cmd_install ;;
+    restart) cmd_restart ;;
+    start)   cmd_start ;;
+    stop)    cmd_stop ;;
+    launch)  shift; cmd_launch "$@" ;;
+    status)  cmd_status ;;
+    *) sed -n '2,15p' "$SELF" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

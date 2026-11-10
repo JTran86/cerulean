@@ -216,8 +216,10 @@ class NotificationsService {
     if (chat.shouldMuteNotification(message) || message.isFromMe!) return;
     final isGroup = chat.isGroup;
     final guid = chat.guid;
-    final contactName = message.handleRelation.target?.displayName ?? "Unknown";
-    final title = isGroup ? (ChatsSvc.getChatState(chat.guid)?.title.value ?? chat.getTitle()) : contactName;
+    final contactName = _senderDisplayName(chat, message);
+    // Same title the chat list shows, for 1:1 chats as well as groups. It used to be the message's own handle name for
+    // 1:1 chats, which could belong to a different contact than the one the chat (and its avatar) resolve to.
+    final title = ChatsSvc.getChatState(chat.guid)?.title.value ?? chat.getTitle();
     final text = hideContent ? "iMessage" : message.getNotificationText();
     final isReaction = !isNullOrEmpty(message.associatedMessageGuid);
 
@@ -278,6 +280,15 @@ class NotificationsService {
         );
       }
     }
+  }
+
+  /// Display name of the message's sender, resolved through [chat]'s own participant handles (the objects the chat
+  /// list and avatars use) and falling back to the handle attached to the message.
+  String _senderDisplayName(Chat chat, Message message) {
+    final messageHandle = message.handleRelation.target;
+    final address = messageHandle?.address;
+    final participant = address == null ? null : chat.handles.where((h) => h.address == address).firstOrNull;
+    return (participant ?? messageHandle)?.displayName ?? "Unknown";
   }
 
   Future<void> tryCreateNewMessageNotification(Message message, Chat chat) async {

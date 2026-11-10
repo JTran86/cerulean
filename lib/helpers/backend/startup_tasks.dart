@@ -1,3 +1,4 @@
+import 'package:bluebubbles/services/backend/java_dart_interop/external_commands_service.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -438,6 +439,9 @@ class StartupTasks {
       ChatsSvc.init(headless: false);
       SocketSvc.init();
     }
+
+    // Lets Spotlight (and `cerulean open`) jump straight into a conversation.
+    unawaited(ExternalCommandsService.start());
 
     // Refresh server details in the background via the GlobalIsolate.
     // Error handling is inside refreshServerDetails(); no need to catch here.

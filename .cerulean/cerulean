@@ -9,6 +9,7 @@
 #   cerulean start      start it in the scratchpad if it is not already running
 #   cerulean stop       quit the running client
 #   cerulean launch     run the installed client in the foreground (what the login autostart uses)
+#   cerulean open ADDR  open the conversation with a phone number or email (Spotlight uses this)
 #   cerulean status     which client is running, and which build is installed
 #
 # The client keeps its settings and messages in ~/.local/share/app.bluebubbles.BlueBubbles, shared with the Arch
@@ -74,6 +75,20 @@ cmd_start() {
     which_running
 }
 
+# cerulean open <phone or email>: open that person's conversation (starting the client if needed) and show it.
+cmd_open() {
+    local addr="${1:?usage: cerulean open <phone number or email>}"
+    local sock="${XDG_RUNTIME_DIR:-/tmp}/cerulean.sock"
+    if [ -z "$(running_pids)" ]; then cmd_start >/dev/null; fi
+    for _ in $(seq 120); do [ -S "$sock" ] && break; sleep 0.5; done      # up to a minute for a cold start
+    [ -S "$sock" ] || { echo "The client did not open its command socket." >&2; exit 1; }
+    python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.sendall(("open "+sys.argv[2]+"\n").encode()); s.close()' "$sock" "$addr"
+    # Bring the scratchpad up if it is not already showing.
+    if ! hyprctl monitors -j | grep -q "\"name\": \"$SCRATCHPAD\""; then
+        hyprctl dispatch 'hl.dsp.workspace.toggle_special("messages")' >/dev/null
+    fi
+}
+
 cmd_restart() { cmd_stop; cmd_start; }
 
 cmd_launch() {
@@ -98,7 +113,8 @@ case "${1:-update}" in
     restart) cmd_restart ;;
     start)   cmd_start ;;
     stop)    cmd_stop ;;
+    open)    shift; cmd_open "$@" ;;
     launch)  shift; cmd_launch "$@" ;;
     status)  cmd_status ;;
-    *) sed -n '2,15p' "$SELF" | sed 's/^# \{0,1\}//'; exit 2 ;;
+    *) sed -n '2,16p' "$SELF" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

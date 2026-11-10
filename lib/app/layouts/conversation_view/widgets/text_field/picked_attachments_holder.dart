@@ -122,13 +122,70 @@ class _PickedAttachmentsHolderState extends State<PickedAttachmentsHolder> with 
                 onSelect: selectMention,
               );
             } else if (hasWordSuggestions) {
-              return _EmojiWordBar(controller: widget.controller!, isIOS: _isIOS);
+              return _FloatingEmojiWordBar(controller: widget.controller!, isIOS: _isIOS);
             }
             return const SizedBox.shrink();
           }),
       ],
     );
   }
+}
+
+/// Hosts [_EmojiWordBar] in an overlay anchored just above this spot, so showing or hiding it never changes the
+/// height of the composer (like Apple's Messages, where the suggestion floats over the conversation).
+class _FloatingEmojiWordBar extends StatefulWidget {
+  const _FloatingEmojiWordBar({required this.controller, required this.isIOS});
+
+  final ConversationViewController controller;
+  final bool isIOS;
+
+  @override
+  State<_FloatingEmojiWordBar> createState() => _FloatingEmojiWordBarState();
+}
+
+class _FloatingEmojiWordBarState extends State<_FloatingEmojiWordBar> with SingleTickerProviderStateMixin {
+  final LayerLink _link = LayerLink();
+  late final AnimationController _fade = AnimationController(vsync: this, duration: const Duration(milliseconds: 120));
+  OverlayEntry? _entry;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final overlay = Overlay.maybeOf(context);
+      if (overlay == null) return;
+      _entry = OverlayEntry(
+        builder: (_) => Positioned(
+          left: 0,
+          top: 0,
+          child: CompositedTransformFollower(
+            link: _link,
+            showWhenUnlinked: false,
+            targetAnchor: Alignment.topLeft,
+            followerAnchor: Alignment.bottomLeft,
+            child: FadeTransition(
+              opacity: _fade,
+              child: _EmojiWordBar(controller: widget.controller, isIOS: widget.isIOS),
+            ),
+          ),
+        ),
+      );
+      overlay.insert(_entry!);
+      _fade.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _entry?.remove();
+    _entry?.dispose();
+    _fade.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => CompositedTransformTarget(link: _link, child: const SizedBox.shrink());
 }
 
 /// iOS QuickType-style row of emoji for the word being typed. Click one (or press Tab for the first) to swap it in.
@@ -139,8 +196,9 @@ class _EmojiWordBar extends StatelessWidget {
   final bool isIOS;
 
   @override
-  Widget build(BuildContext context) {
-    final suggestions = controller.emojiWordSuggestions.toList();
+  Widget build(BuildContext context) => Obx(() => _bar(context, controller.emojiWordSuggestions.toList()));
+
+  Widget _bar(BuildContext context, List<String> suggestions) {
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(

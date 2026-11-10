@@ -3,6 +3,8 @@ import "dart:math";
 import "package:bluebubbles/helpers/helpers.dart";
 import "package:bluebubbles/database/models.dart";
 import "package:bluebubbles/services/services.dart";
+import "package:bluebubbles/services/ui/spelling_service.dart";
+import "package:bluebubbles/utils/spelling/autocorrector.dart";
 import 'package:bluebubbles/utils/emoji.dart';
 import "package:bluebubbles/utils/emoticons.dart";
 import "package:collection/collection.dart";
@@ -11,8 +13,6 @@ import "package:flutter/material.dart";
 import "package:get/get.dart";
 import "package:languagetool_textfield/src/core/enums/mistake_type.dart";
 import 'package:languagetool_textfield/languagetool_textfield.dart';
-import "package:languagetool_textfield/src/utils/closed_range.dart";
-import "package:languagetool_textfield/src/utils/keep_latest_response_service.dart";
 
 class Mentionable {
   Mentionable({required this.handle});
@@ -47,31 +47,29 @@ class Mentionable {
 class SpellCheckTextEditingController extends TextEditingController {
   SpellCheckTextEditingController({super.text, this.focusNode}) {
     assert(focusNode != null || !(kIsDesktop || kIsWeb));
-    _languageCheckService = DebounceLangToolService(
-        LangToolService(LanguageToolClient(language: SettingsSvc.settings.spellcheckLanguage.value)),
-        const Duration(milliseconds: 1000));
-    _processMistakes(text);
+    // The dictionary loads once, in the background; misspellings show up as soon as it is ready.
+    SpellingService.ensureLoaded().then((_) {
+      if (_disposed) return;
+      _processMistakes(text);
+      notifyListeners();
+    });
   }
 
   /// focusNode
   /// Required for spellcheck replacement to work
   FocusNode? focusNode;
 
-  /// Language tool configs
   final HighlightStyle highlightStyle = const HighlightStyle();
-  final _latestResponseService = KeepLatestResponseService();
-  late final LanguageCheckService _languageCheckService;
+  bool _disposed = false;
+
+  /// iOS-style autocorrect; Backspace right after one restores what was typed and teaches the checker the word.
+  final Autocorrector _autocorrector = Autocorrector(onUndo: SpellingService.learn);
 
   /// List which contains Mistake objects spans are built from
   List<Mistake> _mistakes = [];
   int _selectedMistakeIndex = -1;
 
   Mistake? get selectedMistake => _selectedMistakeIndex == -1 ? null : _mistakes.elementAtOrNull(_selectedMistakeIndex);
-
-  Object? _fetchError;
-
-  /// An error that may have occurred during the API fetch.
-  Object? get fetchError => _fetchError;
 
   /// Mistake tooltip
   OverlayEntry? _mistakeTooltip;
@@ -123,6 +121,11 @@ class SpellCheckTextEditingController extends TextEditingController {
       }
     }
 
+    // iOS-style autocorrect (and its Backspace undo) for ordinary typing, not while an input method is composing.
+    if (SettingsSvc.settings.spellcheck.value && (!newValue.composing.isValid || newValue.composing.isCollapsed)) {
+      (newText, newOffset) = _autocorrector.apply(SpellingService.speller, text, newText, newOffset);
+    }
+
     if (newText != origText || newOffset != origOffset) {
       newValue = newValue.copyWith(
         text: newText,
@@ -133,7 +136,7 @@ class SpellCheckTextEditingController extends TextEditingController {
     if (kIsDesktop || kIsWeb) {
       // Only process text change if text actually changed
       if (newValue.text != text) {
-        _handleTextChange(newValue.text);
+        _handleTextChange(newValue.text, newOffset);
       }
     }
 
@@ -150,7 +153,7 @@ class SpellCheckTextEditingController extends TextEditingController {
 
   @override
   void dispose() {
-    _languageCheckService.dispose();
+    _disposed = true;
     _mistakeTooltip?.remove();
     _mistakeTooltip = null;
     super.dispose();
@@ -169,14 +172,11 @@ class SpellCheckTextEditingController extends TextEditingController {
     });
   }
 
-  /// Clear mistakes list when text mas modified and get a new list of mistakes
-  /// via API
-  Future<void> _handleTextChange(String newText) async {
-    ///set value triggers each time, even when cursor changes its location
-    ///so this check avoid cleaning Mistake list when text wasn't really changed
+  /// Re-checks the text after a real change.
+  void _handleTextChange(String newText, int caret) {
+    // set value triggers each time, even when only the cursor moved, so skip if the text did not change
     if (newText == text) return;
-
-    await _processMistakes(newText);
+    _processMistakes(newText, caret: caret);
   }
 
   Future<void> _handleSelectionChange(TextSelection newSelection) async {
@@ -193,90 +193,26 @@ class SpellCheckTextEditingController extends TextEditingController {
     }
   }
 
-  Future<void> _processMistakes(String newText) async {
-    if (!SettingsSvc.settings.spellcheck.value || newText.isEmpty) {
-      _mistakes.clear();
+  /// Finds misspellings with the local checker (nothing leaves the machine). It runs synchronously, and the caller
+  /// updates the field value straight after, which notifies listeners.
+  void _processMistakes(String newText, {int? caret}) {
+    final speller = SpellingService.speller;
+    if (!SettingsSvc.settings.spellcheck.value || newText.isEmpty || speller == null) {
+      _mistakes = [];
       _mistakeTooltip?.remove();
       _mistakeTooltip = null;
-      notifyListeners();
       return;
     }
-    final filteredMistakes = _filterMistakesOnChanged(newText);
-    _mistakes = filteredMistakes.toList();
-
-    final mistakesWrapper = await _latestResponseService.processLatestOperation(
-      () => _languageCheckService.findMistakes(newText),
-    );
-    if (mistakesWrapper == null || !mistakesWrapper.hasResult) return;
-
-    final mistakes = mistakesWrapper.result();
-    _fetchError = mistakesWrapper.error;
-
-    _mistakes = List.from(mistakes);
-    notifyListeners();
-  }
-
-  /// Filters the list of mistakes based on the changes
-  /// in the text when it is changed.
-  Iterable<Mistake> _filterMistakesOnChanged(String newText) sync* {
-    final isSelectionRangeEmpty = selection.end == selection.start;
-    final lengthDiscrepancy = newText.length - text.length;
-
-    for (final mistake in _mistakes) {
-      Mistake? newMistake;
-
-      newMistake = isSelectionRangeEmpty
-          ? _adjustMistakeOffsetWithCaretCursor(
-              mistake: mistake,
-              lengthDiscrepancy: lengthDiscrepancy,
-            )
-          : _adjustMistakeOffsetWithSelectionRange(
-              mistake: mistake,
-              lengthDiscrepancy: lengthDiscrepancy,
-            );
-
-      if (newMistake != null) yield newMistake;
-    }
-  }
-
-  /// Adjusts the mistake offset when the selection is a caret cursor.
-  Mistake? _adjustMistakeOffsetWithCaretCursor({
-    required Mistake mistake,
-    required int lengthDiscrepancy,
-  }) {
-    final mistakeRange = ClosedRange(mistake.offset, mistake.endOffset);
-    final caretLocation = selection.base.offset;
-
-    // Don't highlight mistakes on changed text
-    // until we get an update from the API.
-    final isCaretOnMistake = mistakeRange.contains(caretLocation);
-    if (isCaretOnMistake) return null;
-
-    final shouldAdjustOffset = mistakeRange.isBeforeOrAt(caretLocation);
-    if (!shouldAdjustOffset) return mistake;
-
-    final newOffset = mistake.offset + lengthDiscrepancy;
-
-    return mistake.copyWith(offset: newOffset);
-  }
-
-  /// Adjusts the mistake offset when the selection is a range.
-  Mistake? _adjustMistakeOffsetWithSelectionRange({
-    required Mistake mistake,
-    required int lengthDiscrepancy,
-  }) {
-    final selectionRange = ClosedRange(selection.start, selection.end);
-    final mistakeRange = ClosedRange(mistake.offset, mistake.endOffset);
-
-    final hasSelectedTextChanged = selectionRange.overlapsWith(mistakeRange);
-    if (hasSelectedTextChanged) return null;
-
-    final shouldAdjustOffset = selectionRange.isAfterOrAt(mistake.offset);
-    if (!shouldAdjustOffset) return mistake;
-
-    final newOffset = mistake.offset + lengthDiscrepancy;
-
-    return mistake.copyWith(offset: newOffset);
+    _mistakes = [
+      for (final m in speller.findMistakes(newText, caret: caret))
+        Mistake(
+          message: 'Possible spelling mistake',
+          type: MistakeType.misspelling,
+          offset: m.offset,
+          length: m.length,
+          replacements: m.suggestions,
+        ),
+    ];
   }
 
   /// Returns color for mistake TextSpan style

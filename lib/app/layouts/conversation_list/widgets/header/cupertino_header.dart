@@ -179,14 +179,17 @@ class _MacHeaderRow extends StatelessWidget {
         const SyncIndicator(size: 14),
         const CupertinoChatListFilterButton(),
         const SizedBox(width: 4),
-        Tooltip(
-          message: "New message",
-          child: InkResponse(
-            radius: 18,
-            onTap: () => controller.openNewChatCreator(context),
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: Icon(CupertinoIcons.pencil, size: 19, color: context.theme.colorScheme.onSurface),
+        // Same construction as the original header's compose button (ClipOval > Material > InkWell).
+        ClipOval(
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => controller.openNewChatCreator(context),
+              child: SizedBox(
+                width: 30,
+                height: 30,
+                child: Icon(CupertinoIcons.pencil, size: 20, color: context.theme.colorScheme.onSurface),
+              ),
             ),
           ),
         ),

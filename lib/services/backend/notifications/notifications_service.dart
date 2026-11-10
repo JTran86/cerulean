@@ -59,14 +59,10 @@ class NotificationsService {
   static int? aliasesToast;
   static String? aliasesToastText;
   static Map<String, int> facetimeNotifications = {};
-  static Map<String, int> activeToasts = {};
-  static Map<String, Timer> debounceTimers = {};
-  static Map<String, List<PendingToastItem>> pendingMessages = {};
+  static Map<String, List<int>> activeToasts = {};
   static final Lock _lock = Lock();
   static Player? _desktopNotificationPlayer;
 
-  static const int maxLines = 4;
-  static const int charsPerLineEst = 40;
 
   /// Windows toast identity. The toast icon is registered under the AUMID but only
   /// resolves when it matches the guid (flutter_local_notifications#2738), so one
@@ -231,7 +227,7 @@ class NotificationsService {
         await IntentsSvc.openChat(guid, isInitialIntent: false);
       });
     } else if (kIsDesktop) {
-      // Avatar loading is deferred to _buildAndShowToast — don't load it here.
+      // Avatar loading is deferred to _showToast — don't load it here.
       _lock.synchronized(
           () => showDesktopNotif(text, chat, title, contactName, message, isReaction, message.isGroupEvent));
     } else {
@@ -415,69 +411,27 @@ class NotificationsService {
     if (id != null) await DesktopNotifications.cancel(id);
   }
 
-  void showDesktopNotif(
-      String text, Chat chat, String title, String contactName, Message message, bool isReaction, bool isGroupEvent) {
+  /// Shows one desktop banner for [message].
+  ///
+  /// Every message gets its own banner. This used to stack a chat's recent messages into a single banner that each new
+  /// message cancelled and rebuilt, so two quick messages from the same person read as one notification.
+  Future<void> showDesktopNotif(
+      String text, Chat chat, String title, String contactName, Message message, bool isReaction, bool isGroupEvent) async {
     if (kIsDesktop && !SettingsSvc.settings.desktopNotifications.value) return;
 
-    final String guid = chat.guid;
-
-    pendingMessages[guid] ??= [];
-
-    pendingMessages[guid]!.add(PendingToastItem(
-        sender: chat.isGroup && !isReaction ? contactName.split(" ").first : null,
-        text: text,
-        isReaction: isReaction,
-        isGroupEvent: isGroupEvent,
-    ));
-
-    // Cancel and clean up old timer
-    final oldTimer = debounceTimers[guid];
-    oldTimer?.cancel();
-    debounceTimers[guid] = Timer(
-      const Duration(milliseconds: 300),
-      () async => await _buildAndShowToast(chat, title, message),
+    final PendingToastItem item = PendingToastItem(
+      sender: chat.isGroup && !isReaction ? contactName.split(" ").first : null,
+      text: text,
+      isReaction: isReaction,
+      isGroupEvent: isGroupEvent,
     );
+    await _showToast(chat, title, message, item);
   }
 
-  Future<void> _buildAndShowToast(Chat chat, String title, Message message) async {
+  Future<void> _showToast(Chat chat, String title, Message message, PendingToastItem item) async {
     final String guid = chat.guid;
-    if (pendingMessages[guid]?.isEmpty ?? true) return;
-
-    int usedLines = 0;
-    int numToShow = 0;
-    int numMessages = pendingMessages[guid]!.length;
-
-    final int numSenders = pendingMessages[guid]!.map((p) => p.sender).nonNulls.toSet().length;
-    for (int i = numMessages - 1; i >= 0; i--) {
-      final PendingToastItem item = pendingMessages[guid]![i];
-      final String displayText = numSenders > 1 ? item.senderText : item.text;
-      final int newLines = _estimateLines(displayText);
-      if (usedLines + newLines > maxLines) {
-        break;
-      }
-
-      usedLines += newLines;
-      numToShow += 1;
-    }
-    if (numToShow == 0) {
-      numToShow = 1;
-    }
-
-    final int overflowCount = numMessages - numToShow;
-    final String body = pendingMessages[guid]!
-        .slice(overflowCount)
-        .map((PendingToastItem e) => numSenders > 1 ? e.senderText : e.text)
-        .join("\n");
-
-    final PendingToastItem lastItem = pendingMessages[guid]!.last;
-    final bool multipleMessages = numMessages > 1;
-
-    String displayTitle;
-    if (numSenders == 1 && !lastItem.isReaction && !lastItem.isGroupEvent) {
-      displayTitle = "$title: ${lastItem.sender}";
-    } else {
-      displayTitle = title;
-    }
+    final String displayTitle =
+        item.sender != null && !item.isReaction && !item.isGroupEvent ? "$title: ${item.sender}" : title;
 
     final (String path, bool isTemporaryFile) = await _chatAvatarPath(chat);
 
@@ -488,47 +442,30 @@ class NotificationsService {
         .map(
           (action) => action == "Mark Read"
               ? 'mark-read'
-              : !lastItem.isReaction && !lastItem.isGroupEvent && papi
+              : !item.isReaction && !item.isGroupEvent && papi
               ? action
               : null,
         )
         .nonNulls
         .toList();
-
-    final bool showMarkRead = actionValues.contains('mark-read');
-    final List<String> actionLabels = multipleMessages
-        ? showMarkRead
-              ? ["Mark $numMessages Messages Read"]
-              : const []
-        : actionValues
-              .map((action) => action == 'mark-read' ? 'Mark Read' : ReactionTypes.reactionToEmoji[action]!)
-              .toList();
-    final List<String> toastActions = multipleMessages && showMarkRead ? const ['mark-read'] : actionValues;
+    final List<String> actionLabels = actionValues
+        .map((action) => action == 'mark-read' ? 'Mark Read' : ReactionTypes.reactionToEmoji[action]!)
+        .toList();
     final DesktopMessageData messageData = DesktopMessageData(
       chatGuid: guid,
       messageGuid: message.guid,
-      actions: toastActions,
+      actions: actionValues,
     );
-
-    final String? attribution = overflowCount > 0
-        ? "+$overflowCount earlier message${overflowCount > 1 ? "s" : ""}"
-        : null;
 
     await playDesktopNotificationSound();
 
-    // Always a fresh toast: replacing one in place while its banner is still up only updates Action Center —
-    // Windows plays the sound but leaves the old text on screen.
-    // The explicit cancel matters on Linux, where cancelGroup can't see live notifications.
-    final int? existingToast = activeToasts.remove(guid);
-    if (existingToast != null) await DesktopNotifications.cancel(existingToast);
-    await DesktopNotifications.cancelGroup(guid);
-
+    // Earlier banners for this chat stay up. Every banner gets its own id (see DesktopNotifications._nextGroupId), and
+    // all of them are remembered so reading the chat can clear them together (clearDesktopNotificationsForChat).
     final int? id = await DesktopNotifications.showMessage(
       group: guid,
       avatarPath: path,
       title: displayTitle,
-      body: body,
-      attributionText: attribution,
+      body: item.text,
       actionLabels: actionLabels,
       replyInput: SettingsSvc.settings.showReplyField.value,
       silent: SettingsSvc.settings.desktopNotificationSoundPath.value != null,
@@ -536,7 +473,7 @@ class NotificationsService {
     );
 
     if (id != null) {
-      activeToasts[guid] = id;
+      (activeToasts[guid] ??= []).add(id);
     }
 
     // No dismissal callback exists to clean up the temp avatar, so fall back to a delayed delete.
@@ -568,10 +505,6 @@ class NotificationsService {
     await avatarFile.create(recursive: true);
     await avatarFile.writeAsBytes(avatar);
     return (path, persistPath == null);
-  }
-
-  int _estimateLines(String text) {
-    return (text.length / charsPerLineEst).ceil() + "\n".allMatches(text).length;
   }
 
   void _cleanNotificationState(String guid) {
@@ -785,13 +718,11 @@ class NotificationsService {
 
   Future<void> clearDesktopNotificationsForChat(String chatGuid) async {
     await _lock.synchronized(() async {
-      final int? toastId = activeToasts[chatGuid];
-      if (toastId != null) await DesktopNotifications.cancel(toastId);
+      for (final int toastId in activeToasts[chatGuid] ?? const <int>[]) {
+        await DesktopNotifications.cancel(toastId);
+      }
       await DesktopNotifications.cancelGroup(chatGuid);
       _cleanNotificationState(chatGuid);
-      debounceTimers[chatGuid]?.cancel();
-      debounceTimers.remove(chatGuid);
-      pendingMessages.remove(chatGuid);
     });
   }
 }

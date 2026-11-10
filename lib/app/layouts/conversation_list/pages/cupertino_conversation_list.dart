@@ -59,7 +59,8 @@ class CupertinoConversationListState extends State<CupertinoConversationList> wi
           : context.theme.colorScheme.surface,
       extendBodyBehindAppBar: !showArchived && !showUnknown,
       floatingActionButton: Obx(() =>
-          !kIsDesktop && !SettingsSvc.settings.moveChatCreatorToHeader.value && !showArchived && !showUnknown
+          // Read the setting first: GetX throws if an Obx reads nothing observable (the desktop sidebar has no FAB).
+          !SettingsSvc.settings.moveChatCreatorToHeader.value && !kIsDesktop && !showArchived && !showUnknown
               ? ConversationListFAB(parentController: controller)
               : const SizedBox.shrink()),
       appBar: showArchived || showUnknown

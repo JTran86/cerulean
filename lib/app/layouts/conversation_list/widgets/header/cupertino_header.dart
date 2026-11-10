@@ -20,11 +20,9 @@ class CupertinoHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final double topMargin = context.orientation == Orientation.landscape && context.isPhone
         ? 20
-        : kIsDesktop
-            ? 12
-            : kIsWeb
-                ? 40
-                : kToolbarHeight + 30;
+        : kIsDesktop || kIsWeb
+            ? 40 // clears the custom title bar, a draggable strip drawn over the top of the window that eats clicks
+            : kToolbarHeight + 30;
 
     return SliverToBoxAdapter(
       child: FadeOnScroll(

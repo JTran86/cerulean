@@ -51,10 +51,11 @@ class _TabletModeWrapperState extends State<TabletModeWrapper> with ThemeHelpers
   @override
   void initState() {
     super.initState();
-    _ratio =
-        RxDouble((PrefsSvc.desktop.getSplitRatio() ?? widget.initialRatio).clamp(widget.minRatio, widget.maxRatio));
+    // A fixed split ignores any ratio saved from the days when the divider could be dragged.
+    _ratio = RxDouble(((widget.allowResize ? PrefsSvc.desktop.getSplitRatio() : null) ?? widget.initialRatio)
+        .clamp(widget.minRatio, widget.maxRatio));
     _eventSub = EventDispatcherSvc.stream.listen((event) {
-      if (!mounted) return;
+      if (!mounted || !widget.allowResize) return;
       if (event.type == 'split-refresh') {
         _ratio.value = PrefsSvc.desktop.getSplitRatio() ?? _ratio.value;
         setState(() {});
@@ -64,6 +65,7 @@ class _TabletModeWrapperState extends State<TabletModeWrapper> with ThemeHelpers
       }
     });
     debounce<double>(_ratio, (val) async {
+      if (!widget.allowResize) return;
       await PrefsSvc.desktop.setSplitRatio(val);
       EventDispatcherSvc.emit('split-refresh', null);
     });
@@ -147,7 +149,9 @@ class _TabletModeWrapperState extends State<TabletModeWrapper> with ThemeHelpers
                         : Container(
                             width: widget.dividerWidth,
                             height: constraints.maxHeight,
-                            color: context.theme.colorScheme.surfaceContainerHighest),
+                            color: widget.dividerWidth <= 1
+                                ? context.theme.colorScheme.outline.withValues(alpha: 0.3) // a hairline, like Messages
+                                : context.theme.colorScheme.surfaceContainerHighest),
                     SizedBox(
                       width: _width2,
                       child: widget.right,

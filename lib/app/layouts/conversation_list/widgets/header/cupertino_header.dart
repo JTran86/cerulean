@@ -186,7 +186,7 @@ class _MacHeaderRow extends StatelessWidget {
             onTap: () => controller.openNewChatCreator(context),
             child: Padding(
               padding: const EdgeInsets.all(6),
-              child: Icon(CupertinoIcons.square_pencil, size: 19, color: context.theme.colorScheme.onSurface),
+              child: Icon(CupertinoIcons.pencil, size: 19, color: context.theme.colorScheme.onSurface),
             ),
           ),
         ),

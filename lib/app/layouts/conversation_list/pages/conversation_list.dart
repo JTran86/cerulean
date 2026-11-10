@@ -238,11 +238,15 @@ class _ConversationListState extends CustomState<ConversationList, void, Convers
       safeAreaLeft: false,
       safeAreaRight: false,
       body: TabletModeWrapper(
-        initialRatio: 0.4,
-        minWidthLeft: kIsDesktop || kIsWeb ? 150 : null,
+        // Desktop: a fixed Messages-for-Mac split (about a third of the window, never narrower than 300px or wider
+        // than 420px) with a hairline divider; nothing to drag.
+        initialRatio: kIsDesktop ? 1 / 3 : 0.4,
+        minWidthLeft: kIsDesktop ? 300 : (kIsWeb ? 150 : null),
+        maxWidthLeft: kIsDesktop ? 420 : null,
         minRatio: kIsDesktop || kIsWeb ? 0.1 : 0.33,
         maxRatio: 0.5,
-        allowResize: true,
+        allowResize: !kIsDesktop,
+        dividerWidth: kIsDesktop ? 1 : 7,
         left: !showAltLayout
             ? child
             : LayoutBuilder(builder: (context, constraints) {

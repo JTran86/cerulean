@@ -54,7 +54,7 @@ Icon=$icon
 Categories=Network;Chat;
 StartupWMClass=bluebubbles
 EOF
-    echo "Installed to $PREFIX (built $(stat -c %y "$PREFIX/bluebubbles" | cut -d. -f1))"
+    echo "Installed to $PREFIX (built $(stat -c %y "$PREFIX/lib/libapp.so" | cut -d. -f1))"
 }
 
 cmd_stop() {
@@ -87,7 +87,7 @@ cmd_launch() {
 
 cmd_status() {
     echo "running:"; which_running | sed 's/^/  /'; [ -z "$(running_pids)" ] && echo "  (nothing)"
-    if [ -x "$PREFIX/bluebubbles" ]; then echo "installed: $PREFIX (built $(stat -c %y "$PREFIX/bluebubbles" | cut -d. -f1))"; else echo "installed: no"; fi
+    if [ -x "$PREFIX/bluebubbles" ]; then echo "installed: $PREFIX (built $(stat -c %y "$PREFIX/lib/libapp.so" | cut -d. -f1))"; else echo "installed: no"; fi
     echo "repo: $REPO @ $(git -C "$REPO" describe --tags --always 2>/dev/null) ($(git -C "$REPO" status --short | wc -l) uncommitted file(s))"
 }
 

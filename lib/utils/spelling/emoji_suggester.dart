@@ -63,6 +63,27 @@ class EmojiSuggester {
     if (w.length < 2) return;
     final entry = _index.putIfAbsent(w, () => {});
     if ((entry[emojiIndex] ?? 0) < weight) entry[emojiIndex] = weight;
+    // Also file it under its base form, so "drool" finds "drooling" and "smile" finds "smiling".
+    for (final base in _baseForms(w)) {
+      final e = _index.putIfAbsent(base, () => {});
+      if ((e[emojiIndex] ?? 0) < weight - 12) e[emojiIndex] = weight - 12;
+    }
+  }
+
+  /// Plausible base forms of an -ing / -ed word: "drooling" -> drool, "smiling" -> smil / smile, "hugging" -> hug.
+  static Set<String> _baseForms(String w) {
+    final out = <String>{};
+    for (final suffix in const ['ing', 'ed']) {
+      if (w.length > suffix.length + 2 && w.endsWith(suffix)) {
+        final base = w.substring(0, w.length - suffix.length);
+        out.add(base);
+        out.add('${base}e');
+        if (base.length > 2 && base[base.length - 1] == base[base.length - 2]) {
+          out.add(base.substring(0, base.length - 1)); // hugging -> hug
+        }
+      }
+    }
+    return out..remove(w);
   }
 
   int get size => _emoji.length;
@@ -196,6 +217,9 @@ class EmojiSuggester {
     collect(w, 1.0);
     final singular = _singular(w);
     if (singular != w) collect(singular, 0.9);
+    for (final base in _baseForms(w)) {
+      collect(base, 0.85); // "drooling" typed, "drool" indexed
+    }
 
     final ranked = scores.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final floor = ranked.isEmpty ? 0.0 : ranked.first.value - 35; // drop weak runners-up

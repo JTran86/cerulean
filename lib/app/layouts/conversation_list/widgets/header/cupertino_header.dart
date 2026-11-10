@@ -20,9 +20,11 @@ class CupertinoHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final double topMargin = context.orientation == Orientation.landscape && context.isPhone
         ? 20
-        : kIsDesktop || kIsWeb
-            ? 40
-            : kToolbarHeight + 30;
+        : kIsDesktop
+            ? 12
+            : kIsWeb
+                ? 40
+                : kToolbarHeight + 30;
 
     return SliverToBoxAdapter(
       child: FadeOnScroll(
@@ -31,12 +33,16 @@ class CupertinoHeader extends StatelessWidget {
         child: Container(
           margin: EdgeInsets.only(
             top: topMargin,
-            left: 20,
-            right: 20,
-            bottom: 5,
+            left: kIsDesktop ? 12 : 20,
+            right: kIsDesktop ? 12 : 20,
+            bottom: kIsDesktop ? 8 : 5,
           ),
           child: Obx(() {
             NavigationSvc.listener.value;
+            // Desktop: the Messages-for-Mac header, a search field with the filter and compose buttons beside it.
+            if (kIsDesktop && !NavigationSvc.isAvatarOnly(context)) {
+              return _MacHeaderRow(controller: controller);
+            }
             return Row(
               mainAxisAlignment:
                   NavigationSvc.isAvatarOnly(context) ? MainAxisAlignment.center : MainAxisAlignment.spaceBetween,
@@ -132,6 +138,65 @@ class CupertinoHeader extends StatelessWidget {
           }),
         ),
       ),
+    );
+  }
+}
+
+/// Search field, filter and compose, in the style of the Messages sidebar on the Mac.
+class _MacHeaderRow extends StatelessWidget {
+  const _MacHeaderRow({required this.controller});
+
+  final ConversationListController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = context.theme.colorScheme.onSurface.withValues(alpha: 0.09);
+    final muted = context.theme.colorScheme.outline;
+    return Row(
+      children: [
+        Expanded(
+          child: Material(
+            color: fill,
+            borderRadius: BorderRadius.circular(9),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => NavigationSvc.pushLeft(context, const SearchView()),
+              child: SizedBox(
+                height: 30,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 9),
+                    Icon(CupertinoIcons.search, size: 14, color: muted),
+                    const SizedBox(width: 6),
+                    Text("Search", style: context.theme.textTheme.bodyMedium!.copyWith(fontSize: 13.5, color: muted)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        const SyncIndicator(size: 14),
+        const CupertinoChatListFilterButton(),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: "New message",
+          child: InkResponse(
+            radius: 18,
+            onTap: () => controller.openNewChatCreator(context),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(CupertinoIcons.square_pencil, size: 19, color: context.theme.colorScheme.onSurface),
+            ),
+          ),
+        ),
+        const Material(
+          color: Colors.transparent,
+          shape: CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: OverflowMenu(),
+        ),
+      ],
     );
   }
 }

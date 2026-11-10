@@ -91,14 +91,14 @@ class _PinnedConversationTileState extends CustomState<PinnedConversationTile, v
                     ? context.theme.colorScheme.bubble(context, controller.chat.isIMessage)
                     : Colors.transparent,
             borderRadius: BorderRadius.circular(
-                controller.shouldHighlight.value || controller.shouldPartialHighlight.value ? 8 : 0),
+                controller.shouldHighlight.value || controller.shouldPartialHighlight.value ? (kIsDesktop ? 14 : 8) : 0),
           ),
           child: Material(
             type: MaterialType.transparency,
             child: Listener(
               onPointerDown: (event) => longPressPosition = event.position,
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(kIsDesktop ? 14 : 8),
                 onTap: () => controller.onTap(context),
                 onLongPress: kIsDesktop || kIsWeb
                     ? null

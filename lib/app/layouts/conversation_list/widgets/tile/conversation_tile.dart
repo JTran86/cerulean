@@ -352,8 +352,8 @@ class ChatLeadingState extends State<ChatLeading> with ThemeHelpers {
                           borderRadius: BorderRadius.circular(30),
                           color: context.theme.colorScheme.primary,
                         ),
-                        width: SettingsSvc.settings.denseChatTiles.value ? 36 : (material ? 50 : 45),
-                        height: SettingsSvc.settings.denseChatTiles.value ? 36 : (material ? 50 : 45),
+                        width: SettingsSvc.settings.denseChatTiles.value ? 36 : (material ? 50 : (kIsDesktop && iOS ? 40 : 45)),
+                        height: SettingsSvc.settings.denseChatTiles.value ? 36 : (material ? 50 : (kIsDesktop && iOS ? 40 : 45)),
                         child: Center(
                           child: Icon(
                             Icons.check,
@@ -364,7 +364,7 @@ class ChatLeadingState extends State<ChatLeading> with ThemeHelpers {
                       )
                     : ContactAvatarGroupWidget(
                         chat: widget.controller.chat,
-                        size: SettingsSvc.settings.denseChatTiles.value ? 36 : (material ? 50 : 45),
+                        size: SettingsSvc.settings.denseChatTiles.value ? 36 : (material ? 50 : (kIsDesktop && iOS ? 40 : 45)),
                         editable: false,
                       ),
               ),

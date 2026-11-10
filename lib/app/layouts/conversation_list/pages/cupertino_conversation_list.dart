@@ -59,7 +59,7 @@ class CupertinoConversationListState extends State<CupertinoConversationList> wi
           : context.theme.colorScheme.surface,
       extendBodyBehindAppBar: !showArchived && !showUnknown,
       floatingActionButton: Obx(() =>
-          !SettingsSvc.settings.moveChatCreatorToHeader.value && !showArchived && !showUnknown
+          !kIsDesktop && !SettingsSvc.settings.moveChatCreatorToHeader.value && !showArchived && !showUnknown
               ? ConversationListFAB(parentController: controller)
               : const SizedBox.shrink()),
       appBar: showArchived || showUnknown
@@ -134,7 +134,7 @@ class CupertinoConversationListState extends State<CupertinoConversationList> wi
                             // Derive a clean, capped avatar size from the actual available width
                             final double rawAvatarSize =
                                 (constraints.maxWidth - pageHPadding - colCount * tileHOverhead) / colCount;
-                            final double avatarSize = min(rawAvatarSize, 120.0);
+                            final double avatarSize = min(rawAvatarSize, kIsDesktop ? 72.0 : 120.0);
                             final double tileWidth = avatarSize + tileHOverhead;
 
                             final TextStyle style = context.theme.textTheme.bodyMedium!;
@@ -342,9 +342,10 @@ class CupertinoConversationListState extends State<CupertinoConversationList> wi
                               return Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  topDivider,
+                                  // The Mac-style tile draws its own hairline.
+                                  if (!kIsDesktop) topDivider,
                                   child,
-                                  separator,
+                                  if (!kIsDesktop) separator,
                                 ],
                               );
                             },
@@ -356,7 +357,7 @@ class CupertinoConversationListState extends State<CupertinoConversationList> wi
                   ],
                 )),
           ),
-          if (!showArchived && !showUnknown) CupertinoMiniHeader(controller: controller),
+          if (!showArchived && !showUnknown && !kIsDesktop) CupertinoMiniHeader(controller: controller),
         ],
       ),
     );

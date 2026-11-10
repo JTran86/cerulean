@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:bluebubbles/services/services.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
+import 'package:bluebubbles/utils/spelling/emoji_suggester.dart';
 import 'package:bluebubbles/utils/spelling/local_speller.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart';
@@ -14,10 +15,14 @@ class SpellingService {
   static const String _tag = 'SpellingService';
 
   static LocalSpeller? _speller;
+  static EmojiSuggester? _emoji;
   static Future<void>? _loading;
 
   /// The checker, or null until [ensureLoaded] has finished.
   static LocalSpeller? get speller => _speller;
+
+  /// Emoji suggestions for a word (iOS QuickType-style), or null until loaded.
+  static EmojiSuggester? get emoji => _emoji;
 
   static Future<void> ensureLoaded() => _loading ??= _load();
 
@@ -34,6 +39,7 @@ class SpellingService {
           speller.ignore(word);
         }
       }
+      _emoji = EmojiSuggester(await rootBundle.loadString('assets/dictionaries/emoji_keywords.tsv'));
       _speller = speller;
       Logger.info('Loaded ${speller.dictionarySize} words, ${speller.ignoredWords.length} learned', tag: _tag);
     } catch (e, s) {

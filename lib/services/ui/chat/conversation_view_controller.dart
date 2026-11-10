@@ -84,6 +84,9 @@ class ConversationViewController extends StatefulController with GetSingleTicker
   late final subjectTextController = SpellCheckTextEditingController(focusNode: subjectFocusNode);
   final RxBool showRecording = false.obs;
   final RxList<Emoji> emojiMatches = <Emoji>[].obs;
+
+  /// Emoji offered for the word being typed ("pizza" -> 🍕), shown as a row of chips above the composer.
+  final RxList<String> emojiWordSuggestions = <String>[].obs;
   final RxInt emojiSelectedIndex = 0.obs;
   final RxList<Mentionable> mentionMatches = <Mentionable>[].obs;
   final RxInt mentionSelectedIndex = 0.obs;

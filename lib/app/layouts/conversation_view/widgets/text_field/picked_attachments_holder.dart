@@ -1,3 +1,4 @@
+import 'package:bluebubbles/app/layouts/conversation_view/widgets/text_field/helpers/text_field_match_helper.dart';
 import 'dart:math';
 
 import 'package:bluebubbles/app/components/avatars/contact_avatar_widget.dart';
@@ -107,6 +108,7 @@ class _PickedAttachmentsHolderState extends State<PickedAttachmentsHolder> with 
           Obx(() {
             final hasEmojiMatches = widget.controller!.emojiMatches.isNotEmpty;
             final hasMentionMatches = widget.controller!.mentionMatches.isNotEmpty;
+            final hasWordSuggestions = widget.controller!.emojiWordSuggestions.isNotEmpty;
 
             if (hasEmojiMatches) {
               return _EmojiSuggestions(
@@ -119,10 +121,64 @@ class _PickedAttachmentsHolderState extends State<PickedAttachmentsHolder> with 
                 isIOS: _isIOS,
                 onSelect: selectMention,
               );
+            } else if (hasWordSuggestions) {
+              return _EmojiWordBar(controller: widget.controller!, isIOS: _isIOS);
             }
             return const SizedBox.shrink();
           }),
       ],
+    );
+  }
+}
+
+/// iOS QuickType-style row of emoji for the word being typed. Click one (or press Tab for the first) to swap it in.
+class _EmojiWordBar extends StatelessWidget {
+  const _EmojiWordBar({required this.controller, required this.isIOS});
+
+  final ConversationViewController controller;
+  final bool isIOS;
+
+  @override
+  Widget build(BuildContext context) {
+    final suggestions = controller.emojiWordSuggestions.toList();
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 4, 10, 2),
+        child: Container(
+          decoration: BoxDecoration(
+            color: context.theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(22),
+            border: isIOS ? null : Border.all(color: context.theme.colorScheme.outline.withValues(alpha: 0.25)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final emoji in suggestions)
+                Material(
+                  key: ValueKey(emoji),
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => TextFieldMatchHelper.applyEmojiWordSuggestion(controller, emoji),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      child: Text(emoji, style: const TextStyle(fontSize: 26, fontFamily: "Apple Color Emoji")),
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(left: 4, right: 8),
+                child: Text(
+                  "Tab",
+                  style: context.textTheme.labelSmall!.copyWith(color: context.theme.colorScheme.outline),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

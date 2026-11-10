@@ -317,6 +317,8 @@ class ConversationTextFieldState extends CustomState<ConversationTextField, void
       controller.mentionMatches.value = [];
       controller.mentionSelectedIndex.value = 0;
     }
+
+    TextFieldMatchHelper.processEmojiWordSuggestions(controller, _controller, subject);
   }
 
   @override

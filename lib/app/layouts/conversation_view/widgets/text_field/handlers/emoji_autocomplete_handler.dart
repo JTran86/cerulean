@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:bluebubbles/app/layouts/conversation_view/widgets/text_field/helpers/text_field_match_helper.dart';
 import 'package:bluebubbles/services/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -35,6 +36,10 @@ class EmojiAutocompleteHandler {
   }) {
     // Escape key: clear emoji matches
     if (isEscapeKey) {
+      if (controller.emojiWordSuggestions.isNotEmpty) {
+        controller.emojiWordSuggestions.clear();
+        return true;
+      }
       if (controller.emojiMatches.isNotEmpty) {
         controller.emojiMatches.value = <Emoji>[];
         return true;
@@ -65,6 +70,15 @@ class EmojiAutocompleteHandler {
         }
         return true;
       }
+    }
+
+    // Tab: take the first word-based emoji suggestion (the chip row above the composer)
+    if (isTabOrEnter &&
+        logicalKey == LogicalKeyboardKey.tab &&
+        controller.emojiMatches.isEmpty &&
+        controller.emojiWordSuggestions.isNotEmpty) {
+      TextFieldMatchHelper.applyEmojiWordSuggestion(controller, controller.emojiWordSuggestions.first);
+      return true;
     }
 
     // Tab or Enter: insert emoji at cursor

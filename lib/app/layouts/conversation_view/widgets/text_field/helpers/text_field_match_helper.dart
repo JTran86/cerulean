@@ -1,7 +1,10 @@
 import 'package:bluebubbles/app/components/custom_text_editing_controllers.dart';
-import 'package:bluebubbles/services/ui/chat/conversation_view_controller.dart';
 import 'package:bluebubbles/utils/emoji.dart';
+import 'package:bluebubbles/services/services.dart';
+import 'package:bluebubbles/services/ui/spelling_service.dart';
 import 'package:bluebubbles/utils/logger/logger.dart';
+import 'package:bluebubbles/utils/spelling/emoji_suggester.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:unicode_emojis/unicode_emojis.dart';
 
@@ -47,6 +50,46 @@ class TextFieldMatchHelper {
       controller.emojiMatches.value = [];
       controller.emojiSelectedIndex.value = 0;
     }
+  }
+
+  /// iOS QuickType-style emoji suggestions for the word at the caret ("pizza" -> 🍕). Cheap enough to run on every
+  /// keystroke: it is a dictionary lookup. It stays out of the way of the `:shortcode:` and `@mention` lists.
+  static void processEmojiWordSuggestions(
+    ConversationViewController controller,
+    TextEditingController textController,
+    bool isSubject,
+  ) {
+    final emoji = SpellingService.emoji;
+    if (isSubject || emoji == null || !SettingsSvc.settings.spellcheck.value) {
+      if (controller.emojiWordSuggestions.isNotEmpty) controller.emojiWordSuggestions.clear();
+      return;
+    }
+    final selection = textController.selection;
+    final range = selection.isValid && selection.isCollapsed
+        ? wordRangeAtCaret(textController.text, selection.start)
+        : null;
+    final suggestions = range == null || controller.emojiMatches.isNotEmpty || controller.mentionMatches.isNotEmpty
+        ? const <String>[]
+        : emoji.suggest(range.word);
+    if (suggestions.isEmpty) {
+      if (controller.emojiWordSuggestions.isNotEmpty) controller.emojiWordSuggestions.clear();
+    } else if (!listEquals(controller.emojiWordSuggestions, suggestions)) {
+      controller.emojiWordSuggestions.value = suggestions;
+    }
+  }
+
+  /// Replaces the word at the caret with [emoji] and dismisses the suggestions.
+  static void applyEmojiWordSuggestion(ConversationViewController controller, String emoji) {
+    final field = controller.lastFocusedTextController;
+    final selection = field.selection;
+    final range = selection.isValid ? wordRangeAtCaret(field.text, selection.start) : null;
+    controller.emojiWordSuggestions.clear();
+    if (range == null) return;
+    field.value = TextEditingValue(
+      text: field.text.replaceRange(range.start, range.end, emoji),
+      selection: TextSelection.collapsed(offset: range.start + emoji.length),
+    );
+    controller.lastFocusedNode.requestFocus();
   }
 
   /// Process mention matches based on text input

@@ -386,18 +386,34 @@ class IncomingMessageHandler {
       // Gate add-vs-update on the chat actually existing, not on updateChat's return:
       // updateChat also returns false when headless or when the chat's state isn't
       // loaded, which would otherwise call addChat for a chat that already exists.
-      if (ChatsSvc.findChatByGuid(c.guid) != null) {
-        ChatsSvc.updateChat(c, override: true);
-      } else {
+      final isNewChat = ChatsSvc.findChatByGuid(c.guid) == null;
+      if (isNewChat) {
         await ChatsSvc.addChat(c, immediate: true);
+      } else {
+        ChatsSvc.updateChat(c, override: true);
       }
       ChatsSvc.updateChatLatestMessage(c.guid, saved);
 
       // Fire after the ChatState exists (addChat above) so a contact link
       // resolved during hydration isn't dropped by ChatsService.updateChat's
       // no-op-when-no-state-yet guard for a chat that's brand new this call.
-      if (hydrated.affectedHandleIds.isNotEmpty) {
-        ContactsSvcV2.notifyHandlesUpdated(hydrated.affectedHandleIds);
+      //
+      // For a brand-new chat, refresh every participant rather than only the handles hydration reported: a group's
+      // avatar is built from all of its participants' HandleStates, and one whose contact link was resolved outside
+      // this call kept its first-paint initials until the next message refreshed the chat.
+      final refreshIds = <int>{
+        ...hydrated.affectedHandleIds,
+        if (isNewChat) ...c.handles.map((h) => h.id).whereType<int>(),
+      };
+      if (isNewChat) {
+        Logger.info(
+          'New chat ${c.guid}: ${c.handles.length} participant(s), '
+          '${hydrated.affectedHandleIds.length} newly linked, refreshing ${refreshIds.length} handle state(s)',
+          tag: _tag,
+        );
+      }
+      if (refreshIds.isNotEmpty) {
+        ContactsSvcV2.notifyHandlesUpdated(refreshIds.toList());
       }
     }
 

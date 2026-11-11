@@ -392,6 +392,15 @@ class Main extends StatelessWidget {
             LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.shift, LogicalKeyboardKey.tab):
                 const OpenPreviousChatIntent(),
           LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyI): const OpenChatDetailsIntent(),
+          if (kIsDesktop) LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit1): const OpenPinnedChatIntent(0),
+          if (kIsDesktop) LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit2): const OpenPinnedChatIntent(1),
+          if (kIsDesktop) LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit3): const OpenPinnedChatIntent(2),
+          if (kIsDesktop) LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit4): const OpenPinnedChatIntent(3),
+          if (kIsDesktop) LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit5): const OpenPinnedChatIntent(4),
+          if (kIsDesktop) LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit6): const OpenPinnedChatIntent(5),
+          if (kIsDesktop) LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit7): const OpenPinnedChatIntent(6),
+          if (kIsDesktop) LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit8): const OpenPinnedChatIntent(7),
+          if (kIsDesktop) LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.digit9): const OpenPinnedChatIntent(8),
           LogicalKeySet(LogicalKeyboardKey.escape): const GoBackIntent(),
         },
         builder: (context, child) => SafeArea(
@@ -676,6 +685,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver, TrayListener {
         OpenSearchIntent: OpenSearchAction(context),
         OpenNextChatIntent: OpenNextChatAction(context),
         OpenPreviousChatIntent: OpenPreviousChatAction(context),
+        OpenPinnedChatIntent: OpenPinnedChatAction(context),
         StartIncrementalSyncIntent: StartIncrementalSyncAction(),
         GoBackIntent: GoBackAction(context),
       },

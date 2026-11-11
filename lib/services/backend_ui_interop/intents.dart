@@ -272,6 +272,32 @@ class OpenNextChatAction extends Action<OpenNextChatIntent> {
   }
 }
 
+/// Ctrl+1 .. Ctrl+9: jump straight to the Nth pinned chat, like Messages on the Mac.
+class OpenPinnedChatIntent extends Intent {
+  const OpenPinnedChatIntent(this.index);
+
+  final int index; // 0-based
+}
+
+class OpenPinnedChatAction extends Action<OpenPinnedChatIntent> {
+  OpenPinnedChatAction(this.context);
+
+  final BuildContext context;
+
+  @override
+  Object? invoke(covariant OpenPinnedChatIntent intent) {
+    final pinned = ChatsSvc.getFilteredChats(pinnedOnly: true, filters: ChatsSvc.chatListFilters.value);
+    if (intent.index < pinned.length) {
+      NavigationSvc.pushAndRemoveUntil(
+        context,
+        ConversationView(chat: pinned[intent.index]),
+        (route) => route.isFirst,
+      );
+    }
+    return null;
+  }
+}
+
 class OpenPreviousChatIntent extends Intent {
   const OpenPreviousChatIntent();
 }

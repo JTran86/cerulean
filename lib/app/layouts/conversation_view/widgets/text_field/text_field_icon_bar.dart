@@ -155,7 +155,7 @@ class TextFieldIconBar extends StatelessWidget {
                 if (kIsDesktop || kIsWeb) {
                   controller.showingOverlays = true;
                 }
-                KlipyClient klipy = KlipyClient(apiKey: kIsWeb ? KLIPY_API_KEY : dotenv.get('KLIPY_API_KEY'));
+                KlipyClient klipy = KlipyClient(apiKey: kIsWeb ? KLIPY_API_KEY : klipyApiKey(dotenv.maybeGet('KLIPY_API_KEY')));
                 TextEditingController klipyController = TextEditingController();
                 FocusNode focus = FocusNode();
                 Future<KlipyResultObject?> resultFuture = klipy.showAsBottomSheet(

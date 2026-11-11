@@ -78,18 +78,47 @@ class TextFieldMatchHelper {
     }
   }
 
-  /// Replaces the word at the caret with [emoji] and dismisses the suggestions.
-  static void applyEmojiWordSuggestion(ConversationViewController controller, String emoji) {
+  /// Replaces the word at the caret with [emoji] and dismisses the suggestions. With [options] (the whole list the
+  /// bar showed) a following Tab swaps in the next one; see [cycleEmojiWordSuggestion].
+  static void applyEmojiWordSuggestion(ConversationViewController controller, String emoji, {List<String>? options}) {
     final field = controller.lastFocusedTextController;
     final selection = field.selection;
     final range = selection.isValid ? wordRangeAtCaret(field.text, selection.start) : null;
+    final all = options ?? controller.emojiWordSuggestions.toList();
     controller.emojiWordSuggestions.clear();
     if (range == null) return;
     field.value = TextEditingValue(
       text: field.text.replaceRange(range.start, range.end, emoji),
       selection: TextSelection.collapsed(offset: range.start + emoji.length),
     );
+    final index = all.indexOf(emoji);
+    controller.emojiCycle = all.length > 1 && index >= 0 ? (start: range.start, options: all, index: index) : null;
     controller.lastFocusedNode.requestFocus();
+  }
+
+  /// Tab again right after an emoji was accepted: swap it for the next suggestion (wrapping round). Returns false,
+  /// leaving everything alone, if the text has changed since.
+  static bool cycleEmojiWordSuggestion(ConversationViewController controller) {
+    final cycle = controller.emojiCycle;
+    if (cycle == null) return false;
+    final field = controller.lastFocusedTextController;
+    final current = cycle.options[cycle.index];
+    final end = cycle.start + current.length;
+    if (!field.selection.isCollapsed ||
+        field.selection.start != end ||
+        end > field.text.length ||
+        field.text.substring(cycle.start, end) != current) {
+      controller.emojiCycle = null;
+      return false;
+    }
+    final nextIndex = (cycle.index + 1) % cycle.options.length;
+    final next = cycle.options[nextIndex];
+    field.value = TextEditingValue(
+      text: field.text.replaceRange(cycle.start, end, next),
+      selection: TextSelection.collapsed(offset: cycle.start + next.length),
+    );
+    controller.emojiCycle = (start: cycle.start, options: cycle.options, index: nextIndex);
+    return true;
   }
 
   /// Process mention matches based on text input

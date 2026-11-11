@@ -87,6 +87,9 @@ class ConversationViewController extends StatefulController with GetSingleTicker
 
   /// Emoji offered for the word being typed ("pizza" -> 🍕), shown as a row of chips above the composer.
   final RxList<String> emojiWordSuggestions = <String>[].obs;
+
+  /// Set right after a word is swapped for an emoji, so pressing Tab again can cycle to the next suggestion.
+  ({int start, List<String> options, int index})? emojiCycle;
   final RxInt emojiSelectedIndex = 0.obs;
   final RxList<Mentionable> mentionMatches = <Mentionable>[].obs;
   final RxInt mentionSelectedIndex = 0.obs;

@@ -81,6 +81,15 @@ class EmojiAutocompleteHandler {
       return true;
     }
 
+    // Tab again straight after accepting one: cycle through the other suggestions for that word.
+    if (isTabOrEnter &&
+        logicalKey == LogicalKeyboardKey.tab &&
+        controller.emojiMatches.isEmpty &&
+        controller.emojiWordSuggestions.isEmpty &&
+        TextFieldMatchHelper.cycleEmojiWordSuggestion(controller)) {
+      return true;
+    }
+
     // Tab or Enter: insert emoji at cursor
     if (isTabOrEnter) {
       if (controller.emojiMatches.isEmpty || controller.emojiMatches.length <= controller.emojiSelectedIndex.value) {

@@ -95,8 +95,15 @@ Future<List<InlineSpan>> buildEnrichedMessageSpans(BuildContext context, Message
       );
 
   // extract rich content
+  // Matches full links (http(s)://, www.) and, like iMessage on an iPhone, bare domains such as "example.com/page".
+  // Bare domains need a common top-level domain so file names ("notes.txt") and abbreviations ("e.g.") stay plain
+  // text, and must not follow "@" (email addresses), a word character, "." or "-".
   final urlRegex = RegExp(
-      r'((https?://)|(www\.))[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}([-a-zA-Z0-9/()@:%_.~#?&=*\[\]]*)\b');
+      r'((https?://)|(www\.))[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}([-a-zA-Z0-9/()@:%_.~#?&=*\[\]]*)\b'
+      r'|(?<![@\w.-])(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\.)+'
+      r'(?:com|org|net|io|co|dev|app|edu|gov|ai|me|gg|tv|ly|xyz|info|us|uk|ca)\b'
+      r'(?:/[-a-zA-Z0-9/()@:%_.~#?&=*\[\]+,;!$]*[-a-zA-Z0-9/_~#=*+])?',
+      caseSensitive: false);
   final linkIndexMatches = <TextEntityMatch>[];
   final controller = cvc(message.chat.target ?? ChatsSvc.activeChat!.chat);
   if (!isNullOrEmpty(part.text)) {
@@ -219,10 +226,16 @@ Future<List<InlineSpan>> buildEnrichedMessageSpans(BuildContext context, Message
               ..onTap = () async {
                 if (type == "link") {
                   String url = text;
-                  if (!url.startsWith("http://") && !url.startsWith("https://")) {
-                    url = "http://$url";
+                  if (!url.toLowerCase().startsWith("http://") && !url.toLowerCase().startsWith("https://")) {
+                    url = "https://$url";
                   }
-                  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                  try {
+                    if (!await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)) {
+                      Logger.warn("The system could not open link $url", tag: "Links");
+                    }
+                  } catch (e, stack) {
+                    Logger.warn("Failed to open link $url", tag: "Links", error: e, trace: stack);
+                  }
                 } else if (type == "map") {
                   await MapsLauncher.launchQuery(text);
                 } else if (type == "phone") {

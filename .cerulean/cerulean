@@ -10,6 +10,7 @@
 #   cerulean stop       quit the running client
 #   cerulean launch     run the installed client in the foreground (what the login autostart uses)
 #   cerulean open ADDR  open the conversation with a phone number or email (Spotlight uses this)
+#   cerulean refresh-contacts   re-fetch contacts and pictures from the server in the running client (no restart)
 #   cerulean verify     check the running client came up with no rendering errors (update runs it for you)
 #   cerulean rollback   go back to the previous installed build
 #   cerulean status     which client is running, and which build is installed
@@ -90,6 +91,13 @@ cmd_open() {
     fi
 }
 
+# cerulean refresh-contacts: tell the running client to fetch contacts (and pictures) from the server again. contacts-push uses it.
+cmd_refresh_contacts() {
+    local sock="${XDG_RUNTIME_DIR:-/tmp}/cerulean.sock"
+    [ -S "$sock" ] || { echo "The client is not running." >&2; exit 1; }
+    python3 -c 'import socket,sys; s=socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.sendall(b"refresh-contacts\n"); s.close()' "$sock"
+}
+
 LOG="$HOME/.local/share/app.bluebubbles.BlueBubbles/logs/bluebubbles-latest.log"
 
 # cerulean verify [LINE]: after a start, make sure the client came up and logged no rendering/startup errors
@@ -145,6 +153,7 @@ case "${1:-update}" in
     start)   cmd_start ;;
     stop)    cmd_stop ;;
     open)    shift; cmd_open "$@" ;;
+    refresh-contacts) cmd_refresh_contacts ;;
     launch)  shift; cmd_launch "$@" ;;
     status)  cmd_status ;;
     *) sed -n '2,18p' "$SELF" | sed 's/^# \{0,1\}//'; exit 2 ;;

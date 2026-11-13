@@ -16,6 +16,7 @@ import 'package:bluebubbles/helpers/backend/startup_tasks.dart';
 /// Unix socket at `$XDG_RUNTIME_DIR/cerulean.sock` that only this user can reach. One command per line:
 ///
 ///     open <phone number or email>     open the conversation with that person (or start a new one)
+///     refresh-contacts                 re-fetch contacts and their pictures from the server, no restart needed
 ///
 /// Spotlight uses this to jump from a contact straight into their iMessage thread; `cerulean open ...` wraps it.
 class ExternalCommandsService {
@@ -56,7 +57,17 @@ class ExternalCommandsService {
   static Future<void> _handle(String line) async {
     if (line.startsWith('open ')) {
       await _openConversation(line.substring(5).trim());
+    } else if (line == 'refresh-contacts') {
+      await _refreshContacts();
     }
+  }
+
+  /// Fetch contacts (with pictures) from the server again and update every chat that shows them. `contacts-push` and
+  /// `cerulean refresh-contacts` use this so a contact change does not need a restart (which would close the open chats).
+  static Future<void> _refreshContacts() async {
+    Logger.info('Refreshing contacts on request', tag: _tag);
+    final affected = await ContactsSvcV2.syncContactsToHandles();
+    Logger.info('Contacts refreshed, ${affected.length} handle(s) updated', tag: _tag);
   }
 
   /// "+1 (904) 660-5984" -> "+19046605984"; emails are only lower-cased.

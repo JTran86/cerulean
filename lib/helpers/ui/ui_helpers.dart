@@ -548,6 +548,12 @@ void showSnackbar(String title, String message,
     unawaited(showToast(message, isError: true));
     return;
   }
+  // At startup (for example a sync that fails because the server is still booting) there is no window to draw on yet, and
+  // Get.width throws a null check. A stale error shown after startup would only confuse, so log it instead.
+  if (Get.context == null) {
+    Logger.warn("Dropped a snackbar shown before the window existed: $title: $message", tag: "Snackbar");
+    return;
+  }
   // Top of the screen (top-right when there's room), so it never covers the text field; on desktop it also sits
   // under the title bar to keep the window buttons clear. GetX adds the status bar inset on mobile itself.
   // The title bar check matches TitleBarWrapper's rule for when the custom title bar is drawn.

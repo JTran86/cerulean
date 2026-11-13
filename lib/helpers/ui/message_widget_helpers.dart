@@ -181,6 +181,9 @@ Future<List<InlineSpan>> buildEnrichedMessageSpans(BuildContext context, Message
     ));
   }
   linkIndexMatches.sort((a, b) => a.start.compareTo(b.start));
+  // Tappable text (links, phone numbers, dates ...) is blue in received bubbles, like iMessage. Sent bubbles are already
+  // blue, so they keep the bubble's text colour (underlined), as does text with an explicit colour override.
+  final linkColor = (message.isFromMe! || colorOverride != null) ? null : context.theme.colorScheme.bubble(context, true);
   // render rich content if needed
   if (linkIndexMatches.isNotEmpty) {
     linkIndexMatches.forEachIndexed((i, e) {
@@ -258,7 +261,7 @@ Future<List<InlineSpan>> buildEnrichedMessageSpans(BuildContext context, Message
                       mode: LaunchMode.externalApplication);
                 }
               },
-            style: textStyle.apply(decoration: TextDecoration.underline),
+            style: textStyle.apply(decoration: TextDecoration.underline, color: linkColor),
           ),
         );
       } else {
